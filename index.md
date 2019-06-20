@@ -1,5 +1,7 @@
 [![Available in the Chrome Web Store](https://developer.chrome.com/webstore/images/ChromeWebStore_BadgeWBorder_v2_206x58.png)](https://chrome.google.com/webstore/detail/bulk-renamer-for-google-d/peboiggabkeljjdnbelmhbpnmonomngo)
 
+![Bulk Renamer for Google Drive™](static/bulkrenamer-webpage-banner-01.png)
+
 **Bulk Renamer for Google Drive™** renames all files in selected Drive folder according to chosen settings. 
 
 No more need to sync files to your desktop, rename them using OS-specific tools and sync them back to Drive. Just select a folder, choose rename options (see details below) and sit back and watch your files being renamed!

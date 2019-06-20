@@ -42,3 +42,5 @@ I may update this Privacy Policy from time to time. Thus, you are advised to rev
 ### Contact Us
 
 If you have any questions or suggestions about Bulk Renamer for Google Drive™ Privacy Policy, do not hesitate to contact me.
+
+_Google Drive is a trademark of Google Inc. Use of this trademark is subject to Google Permissions._

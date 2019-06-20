@@ -1,1 +1,11 @@
 theme: jekyll-theme-cayman
+title: Bulk Renamer for Google Drive™
+description: Rename multiple files in selected Google Drive™ folder! 
+logo_url: /static/bulkrenamer.png
+show_downloads: false
+lang: en
+google_analytics: UA-120222754-1
+github:
+  is_project_page: false
+  repository_url: https://github.com/azadisaryev/BulkRenamerForGoogleDrive/
+  owner_url: https://github.com/azadisaryev/BulkRenamerForGoogleDrive/

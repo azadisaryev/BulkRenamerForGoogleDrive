@@ -70,7 +70,11 @@ function checkFolders(listFolders) {
 function doRenameFile(id, name, newname, moddate) {
   var result = {success:true, id:id, name:name, newname:false};
   try {
-    Drive.Files.patch( {'title':newname}, id, {'updateViewedDate':false, 'setModifiedDate':(moddate===null?false:true), 'modifiedDate':moddate} );
+    Drive.Files.patch(
+      {'title':newname}, 
+      id, 
+      {'updateViewedDate':false, 'setModifiedDate':(moddate===null?false:true), 'modifiedDate':moddate}
+    );
     result.newname = newname;
   }
   catch(e) {
@@ -85,7 +89,13 @@ function doRenameFileWithBackoff(id, name, newname, moddate) {
 
   try {
     rateLimitExpBackoff_(
-      function() {return Drive.Files.patch( {'title':newname}, id, {'updateViewedDate':false, 'setModifiedDate':(moddate===null?false:true), 'modifiedDate':moddate} );}
+      function() {
+        return Drive.Files.patch( 
+          {'title':newname}, 
+          id, 
+          {'updateViewedDate':false, 'setModifiedDate':(moddate===null?false:true), 'modifiedDate':moddate}
+        );
+      }
     );
     result.newname = newname;
   }

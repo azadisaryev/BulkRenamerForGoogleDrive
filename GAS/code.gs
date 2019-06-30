@@ -2,8 +2,9 @@ function doGet() {
   var t = HtmlService.createTemplateFromFile('index');
   return t
         .evaluate()
-        .setTitle("Bulk Renamer for Google Drive™")
+        .setTitle("Bulk Renamer for Drive")
         .setSandboxMode(HtmlService.SandboxMode.IFRAME)
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
         .addMetaTag('viewport', 'width=device-width, initial-scale=1')
         .setFaviconUrl("https://raw.githubusercontent.com/azadisaryev/BulkRenamerForGoogleDrive/master/static/bulkrenamer.png");
 }
@@ -13,29 +14,8 @@ function include(filename) {
 }
 
 function getOAuthToken() {
-  DriveApp.getRootFolder();
+  //DriveApp.getRootFolder(); //this is needed (as a comment is fine too!) to be able to use ScriptApp.getAuthToken()
   return ScriptApp.getOAuthToken();
-}
-
-function retrieveAllFilesInFolder_(folderId) {
-  var hasPageToken = true,
-      pageToken,
-      result = [];
-  var q = "trashed=false and '"+folderId+"' in parents and mimeType!='application/vnd.google-apps.folder'";
-  var fields = "items(createdDate,fileExtension,id,mimeType,modifiedDate,title),nextPageToken";
-
-  var retrievePageOfFiles = function(pageToken, searchQuery, fieldsList) {
-    return Drive.Files.list({pageToken:pageToken, q:searchQuery, fields:fieldsList});
-  }
-
-  while ( hasPageToken ) {
-    var page = retrievePageOfFiles(pageToken, q, fields);
-    result = result.concat(page.items);
-    pageToken = page.nextPageToken;
-    hasPageToken = pageToken;
-  }
-  
-  return result;
 }
 
 function checkFolders(listFolders) {
@@ -66,14 +46,52 @@ function checkFolders(listFolders) {
   return result;
 }
 
+function retrieveAllFilesInFolder_(folderId) {
+  var hasPageToken = true,
+      pageToken,
+      result = [];
+  var q = "trashed=false and '"+folderId+"' in parents and mimeType!='application/vnd.google-apps.folder'";
+  var fields = "items(createdDate,fileExtension,id,mimeType,modifiedDate,title),nextPageToken";
 
-function doRenameFile(id, name, newname, moddate) {
+  var retrievePageOfFiles = function(pageToken, searchQuery, fieldsList) {
+    return Drive.Files.list({pageToken:pageToken, q:searchQuery, fields:fieldsList});
+  }
+
+  while ( hasPageToken ) {
+    var page = retrievePageOfFiles(pageToken, q, fields);
+    result = result.concat(page.items);
+    pageToken = page.nextPageToken;
+    hasPageToken = pageToken;
+  }
+  
+  return result;
+}
+
+
+function doRenameFile(id, name, newname, keepModDate) {
   var result = {success:true, id:id, name:name, newname:false};
   try {
-    Drive.Files.patch(
-      {'title':newname}, 
-      id, 
-      {'updateViewedDate':false, 'setModifiedDate':(moddate===null?false:true), 'modifiedDate':moddate}
+    Drive.Files.patch( {'title':newname}, id, {'updateViewedDate':false, 'modifiedDateBehavior':(keepModDate?'noChange':'now')} );
+    result.newname = newname;
+  }
+  catch(e) {
+    result.success = false;
+    result.err = e.message;
+  }
+  return result;
+}
+
+function doRenameFileWithBackoff(id, name, newname, keepModDate) {
+  var result = {success:true, id:id, name:name, newname:false};
+  try {
+    rateLimitExpBackoff_(
+      function() {
+        return Drive.Files.patch( 
+          {'title':newname}, 
+          id, 
+          {'updateViewedDate':false, 'modifiedDateBehavior':(keepModDate?'noChange':'now')}
+        );
+      }
     );
     result.newname = newname;
   }
@@ -84,24 +102,12 @@ function doRenameFile(id, name, newname, moddate) {
   return result;
 }
 
-function doRenameFileWithBackoff(id, name, newname, moddate) {
-  var result = {success:true, id:id, name:name, newname:false};
-
-  try {
-    rateLimitExpBackoff_(
-      function() {
-        return Drive.Files.patch( 
-          {'title':newname}, 
-          id, 
-          {'updateViewedDate':false, 'setModifiedDate':(moddate===null?false:true), 'modifiedDate':moddate}
-        );
-      }
-    );
-    result.newname = newname;
-  }
-  catch(e) {
-    result.success = false;
-    result.err = e.message;
+function doBulkRename(arrFiles, keepModDate) {
+  var result = [], lenFiles = arrFiles.length;
+  for (var i=0; i<lenFiles; ++i) {
+    var objFile = arrFiles[i];
+    var moddate = (keepModDate ? objFile.moddate : null);
+    result.push( doRenameFileWithBackoff(objFile.id, objFile.name, objFile.newname, moddate) );
   }
   return result;
 }
@@ -118,8 +124,9 @@ function rateLimitExpBackoff_( callBack, sleepFor, maxAttempts, attempts ) {
   
   // can handle multiple error conditions by expanding this list
   function errorQualifies(errorText) {
-    //Logger.log(errorText);
-    return ["Exception: Service invoked too many times", "Exception: Rate Limit Exceeded", "Exception: User rate limit exceeded", "User Rate Limit Exceeded"].some(function(e){
+   //Logger.log(errorText);
+    //console.log(errorText);
+    return ["GoogleJsonResponseException: API call to drive.files.patch failed with error: User Rate Limit Exceeded", "Exception: Service invoked too many times", "Exception: Rate Limit Exceeded", "Exception: User rate limit exceeded", "User Rate Limit Exceeded"].some(function(e){
               return errorText.toString().slice(0,e.length) == e;
             });
   }
@@ -143,6 +150,7 @@ function rateLimitExpBackoff_( callBack, sleepFor, maxAttempts, attempts ) {
       return callBack();
     }
     catch(err) {
+      //console.log(err);
       // failed due to rate limiting
       if ( errorQualifies(err) ) {
         //give up?
@@ -151,7 +159,7 @@ function rateLimitExpBackoff_( callBack, sleepFor, maxAttempts, attempts ) {
         }
         else {
           // wait for some amount of time based on how many times we've tried plus a small random bit to avoid races
-          Utilities.sleep( Math.pow(2,attempts)*sleepFor) + (Math.round(Math.random() * sleepFor) );
+          Utilities.sleep( (Math.pow(2,attempts)*sleepFor) + (Math.round(Math.random() * sleepFor)) );
           // try again
           return rateLimitExpBackoff_( callBack, sleepFor, maxAttempts, attempts+1 );
         }
